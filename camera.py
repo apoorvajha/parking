@@ -1,10 +1,10 @@
 import cv2
 import numpy as np
 import time
-
+from text_reader import detect_text
 
 IMG_WIDTH = 640
-IMG_HEIGHT = 480
+IMG_HEIGHT = 320
 FIRST_IMAGE = "data/first_image.jpeg"
 SAVED_FRAMES_PATH = "data/saved_frames/"
 
@@ -26,7 +26,8 @@ def reset():
     cv2.imwrite(FIRST_IMAGE, first_img)
 
 
-def capture_cont(interval=1, car_pass_interval=2):
+def capture_cont(interval=0.1, car_pass_interval=0.2):
+    parking = set()
     first_image = cv2.imread(FIRST_IMAGE)
     prev_frame = first_image[:]
     while True:
@@ -38,20 +39,25 @@ def capture_cont(interval=1, car_pass_interval=2):
         gray1 = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray2 = cv2.cvtColor(first_image, cv2.COLOR_BGR2GRAY)
         gray3 = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
-        print("frst: "+ str(np.linalg.norm(gray1 - gray2)))
-        print("prev: "+ str(np.linalg.norm(gray1 - gray3)))
-        cv2.imwrite(SAVED_FRAMES_PATH + str(ts) +".jpeg" , gray1)
-        #cv2.imwrite(SAVED_FRAMES_PATH + str(ts) +".jpeg" , gray2)
-        #cv2.imwrite(SAVED_FRAMES_PATH + str(ts) +".jpeg" , frame)
-        if np.linalg.norm(frame - first_image) > 130000.0:
-            # We have a car
-            if np.linalg.norm(frame - prev_frame) < 110000.0:
-                # Car is stationary
-                ts = time.time()
+        gray1 = gray1/np.sum(gray1)
+        gray2 = gray2/np.sum(gray2)
+        gray3 = gray3/np.sum(gray3)
+        vs_first = np.linalg.norm(gray1 - gray2)
+        vs_prev = np.linalg.norm(gray1 - gray3)
+        if vs_first > vs_prev:
+            # we have a car
+            ts = time.time()
+            text = detect_text(frame)
+            print(text)
+            cv2.imwrite(SAVED_FRAMES_PATH + str(ts) + ".jpeg", frame)
+            if text:
                 cv2.imwrite(SAVED_FRAMES_PATH + str(ts) + ".jpeg", frame)
-                time.sleep(car_pass_interval)
+                print(text)
+
+            time.sleep(car_pass_interval)
+
         prev_frame = frame[:]
         time.sleep(interval)
 
-reset()
+#reset()
 capture_cont()
