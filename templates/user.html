@@ -1,0 +1,27 @@
+<html>
+<title> USER STATS</title>
+<body>
+    <h1> User stats</h1>
+<h2><p> Car Number | In Time | Out Time</p></h2>
+    {% if message %}
+        <p>{{ message }}</p><br>
+    {% endif %}
+    <h1> User points available:</h1>
+    {% if pts %}
+        <p>{{pts}}</p>
+    {% endif %}
+    <h1> Parking slot: </h1>
+    {% if parking_spot %}
+        <p>parking_spot</p>
+    {% endif %}
+    <form action="" method="post">
+        <p>
+            <label for="car_num">Enter car number</label>
+            <input type="text" name="car_num">
+        </p>
+        <p>
+            <input type="submit">
+        </p>
+    </form>
+</body>
+</html>

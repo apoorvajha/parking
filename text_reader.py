@@ -2,13 +2,17 @@ from imutils.object_detection import non_max_suppression
 import numpy as np
 import cv2
 import pytesseract
+import string
 
 MIN_CONFIDENCE = 0.5
 PADDING = 0.10
 WEIGHTS_PATH = "frozen_east_text_detection.pb"
 IMG_WIDTH = 640
-IMG_HEIGHT = 320
+IMG_HEIGHT = 480
 
+STATE_CODES = ['AP', 'AR', 'AS', 'BR', 'CG', 'GA','GJ', 'HR', 'HP', 'JK', 'JH', 'KA', 'KL', 'MP', 'MH','MN'	
+,'ML', 'MZ', 'NL', 'OD', 'PB', 'RJ', 'SK', 'TN', 'TS', 'TR', 'UA', 'UK', 'UP', 'WB', 'AN', 'CH'	
+,'DN', 'DD', 'DL', 'LD', 'PY']
 
 def decode(scores, geometry):
     numRows, numCols = scores.shape[2:4]
@@ -40,9 +44,46 @@ def decode(scores, geometry):
             rectangles.append((startX, startY, endX, endY))
             confidences.append(scoresData[x])
     return rectangles, confidences
-            
 
-def detect_text(image):
+
+def follows_pattern(text):
+    # remove -, | {,}
+    for x in ['-', '|', '{', '}']:
+        text = text.replace(x, '')
+    # remove white space
+    text = ''.join(text.split())
+
+    eng_char = set(string.ascii_uppercase)
+    nums = set([str(i) for i in range(10)])
+
+    try:
+        for state in STATE_CODES:
+            # HP, PB
+            if state in text:
+                st = text.find(state)
+                # two numbers 01, 22, 67
+                if text[st+2] in nums and text[st+3] in nums:
+                    # 1 or two alphabets
+                    if text[st+4] in eng_char:
+                        if text[st+5] in eng_char:
+                            # 2 alphabets
+                            if text[st+6] in nums and\
+                                text[st+7] in nums and\
+                                text[st+8] in nums and\
+                                text[st+9] in nums:
+                                return text[st:st+9+1]
+                        else:
+                            # 1 alphabet
+                            if text[st+5] in nums and\
+                                text[st+6] in nums and\
+                                text[st+7] in nums and\
+                                text[st+8] in nums:
+                                return text[st:st+8+1]
+        return None
+    except:
+        return None
+
+def detect_text(net, image):
     orig = image.copy()
 
     H, W = image.shape[:2]
@@ -55,8 +96,6 @@ def detect_text(image):
         "feature_fusion/concat_3"
     ]
 
-    net = cv2.dnn.readNet(WEIGHTS_PATH)
-
     blob = cv2.dnn.blobFromImage(image, 1.0, (W, H), (123.68, 116.78, 103.94), swapRB=True, crop = False)
 
     net.setInput(blob)
@@ -66,60 +105,29 @@ def detect_text(image):
 
     boxes = non_max_suppression(np.array(rectangles), probs=confidences)
 
-    config = ("-l eng --oem 1 --psm 12")
+    results = set()
+    for padding in [0.20, 0.5]:
+        for psm in [7]:
+            config = ("-l eng --oem 1 --psm "+str(psm))
+            for startX, startY, endX, endY in boxes:
+                dX = int((endX - startX) * padding)
+                dY = int((endY - startY) * padding)
 
+                startX = max(0, startX - dX)
+                startY = max(0, startY - dY)
+                endX = min(W, endX + (dX * 2))
+                endY = min(H, endY + (dY * 2))
 
+                img_part = image[startY:endY, startX:endX]
 
-    results = []
-    minx = 1000
-    miny = 1000
-    maxx = 0
-    maxy = 0
-    for startX, startY, endX, endY in boxes:
-        if(startX < minx):
-            minx = startX
-        if(startY < miny):
-            miny = startY
-        if(endX > maxx):
-            maxx = endX
-        if(endY > maxy):
-            maxy = endY
-
-    startX = minx
-    startY = miny
-    endX = maxx
-    endY = maxy
-    print(startX, startY, endX, endY)
-    dX = int((endX - startX) * PADDING)
-    dY = int((endY - startY) * PADDING)
-
-    startX = max(0, startX - dX)
-    startY = max(0, startY - dY)
-    endX = min(W, endX + (dX * 2))
-    endY = min(H, endY + (dY * 2))
-
-    img_part = image[startY:endY, startX:endX]
-
-    text = pytesseract.image_to_string(img_part, config=config)
-    results.append(text)
-    # for startX, startY, endX, endY in boxes:
-    #     dX = int((endX - startX) * PADDING)
-    #     dY = int((endY - startY) * PADDING)
-
-    #     startX = max(0, startX - dX)
-    #     startY = max(0, startY - dY)
-    #     endX = min(W, endX + (dX * 2))
-    #     endY = min(H, endY + (dY * 2))
-
-    #     img_part = image[startY:endY, startX:endX]
-
-    #     text = pytesseract.image_to_string(img_part, config=config)
-    #     results.append(text)
-
+                text = pytesseract.image_to_string(img_part, config=config)
+                formatted_text = follows_pattern(text)
+                if formatted_text:
+                    results.add(formatted_text)
     if results:
-        return results
+        return list(results)
     return None
 
-# img = cv2.imread('b.png')
+# img = cv2.imread('c.jpg')
 # img = cv2.resize(img, (IMG_WIDTH, IMG_HEIGHT))
 # print(detect_text(img))
